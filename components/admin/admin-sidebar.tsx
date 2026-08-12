@@ -2,29 +2,32 @@
 
 import { cn } from "@/lib/utils"
 import {
+  Building2,
+  ChartNoAxesColumn,
+  CalendarClock,
+  FlaskConical,
   LayoutDashboard,
-  FileText,
-  BarChart3,
   Settings,
   Users,
-  LogOut,
-  FlaskConical,
   X,
   Shield,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { SignOutButton } from "@/components/auth/sign-out-button"
 
 const navigation = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { name: "Tests", href: "/admin/tests", icon: FlaskConical },
-  { name: "Users", href: "/admin/users", icon: Users },
-  { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+  { name: "Customers", href: "/admin/customers", icon: Building2 },
+  { name: "Staff", href: "/admin/staff", icon: Users },
+  { name: "Schedules", href: "/admin/schedules", icon: CalendarClock },
+  { name: "Inventory", href: "/admin/inventory", icon: FlaskConical },
+  { name: "Reports", href: "/admin/reports", icon: ChartNoAxesColumn },
 ]
 
 const secondaryNav = [
-  { name: "Settings", href: "/admin/settings", icon: Settings },
+  { name: "Settings", href: "#", icon: Settings },
 ]
 
 interface AdminSidebarProps {
@@ -37,7 +40,6 @@ export function AdminSidebar({ open, onClose }: AdminSidebarProps) {
 
   return (
     <>
-      {/* Mobile overlay */}
       {open && (
         <div
           className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
@@ -52,14 +54,13 @@ export function AdminSidebar({ open, onClose }: AdminSidebarProps) {
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Logo */}
         <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <Shield className="h-4 w-4 text-primary-foreground" />
             </div>
             <div className="flex flex-col">
-              <span className="text-lg font-semibold tracking-tight leading-none">TestHub</span>
+              <span className="text-lg font-semibold tracking-tight leading-none">Bug Patrol</span>
               <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Admin</span>
             </div>
           </div>
@@ -73,7 +74,6 @@ export function AdminSidebar({ open, onClose }: AdminSidebarProps) {
           </Button>
         </div>
 
-        {/* Navigation */}
         <nav className="flex flex-1 flex-col gap-1 p-4">
           <div className="space-y-1">
             {navigation.map((item) => {
@@ -109,26 +109,22 @@ export function AdminSidebar({ open, onClose }: AdminSidebarProps) {
                 {item.name}
               </Link>
             ))}
-            <Link
-              href="/admin/login"
+            <SignOutButton
               onClick={onClose}
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-accent/50 hover:text-foreground"
-            >
-              <LogOut className="h-4 w-4" />
-              Log out
-            </Link>
+              iconClassName="h-4 w-4"
+            />
           </div>
         </nav>
 
-        {/* User */}
         <div className="border-t border-sidebar-border p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
               AD
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-medium">Admin</span>
-              <span className="text-xs text-muted-foreground">Super Admin</span>
+              <span className="text-sm font-medium">Admin User</span>
+              <span className="text-xs text-muted-foreground">Access control</span>
             </div>
           </div>
         </div>

@@ -2,29 +2,26 @@
 
 import { cn } from "@/lib/utils"
 import {
-  LayoutDashboard,
-  FileText,
-  BarChart3,
+  CalendarClock,
+  History,
+  UserRound,
   Settings,
-  HelpCircle,
-  LogOut,
-  FlaskConical,
   X,
+  Shield,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { SignOutButton } from "@/components/auth/sign-out-button"
 
 const navigation = [
-  { name: "Home", href: "/", icon: LayoutDashboard },
-  // { name: "Assessments", href: "/tests", icon: FlaskConical },
-  { name: "Insights", href: "/results", icon: FileText },
-  // { name: "Progress", href: "/analytics", icon: BarChart3 },
+  { name: "Assigned Visits", href: "/", icon: CalendarClock },
+  { name: "Visit History", href: "/history", icon: History },
+  { name: "Profile", href: "/profile", icon: UserRound },
 ]
 
 const secondaryNav = [
-  { name: "Settings", href: "/settings", icon: Settings },
-
+  { name: "Settings", href: "#", icon: Settings },
 ]
 
 interface SidebarProps {
@@ -37,7 +34,6 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* Mobile overlay */}
       {open && (
         <div
           className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
@@ -52,13 +48,15 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Logo */}
         <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <FlaskConical className="h-4 w-4 text-primary-foreground" />
+              <Shield className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="text-lg font-semibold tracking-tight">MindTrack</span>
+            <div className="flex flex-col">
+              <span className="text-lg font-semibold tracking-tight leading-none">Bug Patrol</span>
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Staff</span>
+            </div>
           </div>
           <Button
             variant="ghost"
@@ -70,7 +68,6 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           </Button>
         </div>
 
-        {/* Navigation */}
         <nav className="flex flex-1 flex-col gap-1 p-4">
           <div className="space-y-1">
             {navigation.map((item) => {
@@ -95,37 +92,42 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           </div>
 
           <div className="mt-auto space-y-1">
-            {secondaryNav.map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                onClick={onClose}
-                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-accent/50 hover:text-foreground"
-              >
-                <item.icon className="h-4 w-4" />
-                {item.name}
-              </Link>
-            ))}
-            <Link
-              href="/login"
+            {secondaryNav.map((item) => {
+              const isActive = pathname === item.href
+
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={onClose}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                    isActive
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                >
+                  <item.icon className={cn("h-4 w-4", isActive && "text-primary")} />
+                  {item.name}
+                </Link>
+              )
+            })}
+            <SignOutButton
               onClick={onClose}
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-accent/50 hover:text-foreground"
-            >
-              <LogOut className="h-4 w-4" />
-              Log out
-            </Link>
+              iconClassName="h-4 w-4"
+            />
           </div>
         </nav>
 
-        {/* User */}
         <div className="border-t border-sidebar-border p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-              JD
+              ST
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-medium">John Doe</span>
-              <span className="text-xs text-muted-foreground">Reflection profile</span>
+              <span className="text-sm font-medium">Staff User</span>
+              <span className="text-xs text-muted-foreground">Team member</span>
             </div>
           </div>
         </div>

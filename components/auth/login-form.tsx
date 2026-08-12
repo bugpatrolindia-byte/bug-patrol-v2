@@ -1,40 +1,29 @@
 "use client"
 
-import { FormEvent, useState, type ComponentType } from "react"
-import Link from "next/link"
+import { FormEvent, useState } from "react"
 import { ArrowRight, LockKeyhole, Mail } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { getUserRole } from "@/lib/auth/roles"
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 
 interface LoginFormProps {
   title: string
   description: string
-  roleLabel: string
-  destination: string
-  icon: ComponentType<{ className?: string }>
-  switchHref: string
-  switchLabel: string
-  switchText: string
 }
 
 export function LoginForm({
   title,
   description,
-  roleLabel,
-  destination,
-  icon: Icon,
-  switchHref,
-  switchLabel,
-  switchText,
 }: LoginFormProps) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     if (!email.trim() || !password.trim()) {
@@ -44,7 +33,42 @@ export function LoginForm({
 
     setError("")
     setIsSubmitting(true)
-    window.location.assign(destination)
+
+    try {
+      const supabase = createSupabaseBrowserClient()
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      })
+
+      if (signInError) {
+        setError(signInError.message)
+        return
+      }
+
+      const signedInRole = getUserRole(data.user)
+
+      if (!signedInRole) {
+        await supabase.auth.signOut()
+        setError("This account does not have a staff or admin role.")
+        return
+      }
+
+      const nextPath = new URLSearchParams(window.location.search).get("next")
+      const roleHome = signedInRole === "admin" ? "/admin" : "/"
+      const safeNextPath = nextPath?.startsWith("/") && !nextPath.startsWith("//") ? nextPath : null
+      const canUseNextPath =
+        signedInRole === "admin"
+          ? safeNextPath === "/admin" || Boolean(safeNextPath?.startsWith("/admin/"))
+          : safeNextPath === "/" || safeNextPath === "/history" || safeNextPath === "/profile"
+      const destination = canUseNextPath && safeNextPath ? safeNextPath : roleHome
+
+      window.location.assign(destination)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to sign in. Try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -59,16 +83,6 @@ export function LoginForm({
         </div>
 
         <div className="mx-auto w-full max-w-sm">
-          {/* <div className="mb-8 flex items-center justify-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-              <Icon className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-base font-semibold leading-tight">MindTrack</p>
-              <p className="text-xs text-muted-foreground">{roleLabel}</p>
-            </div>
-          </div> */}
-
           <div className="space-y-6">
             <div className="space-y-2 text-center">
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">
@@ -81,8 +95,6 @@ export function LoginForm({
 
             <form
               noValidate
-              action={destination}
-              method="get"
               onSubmit={handleSubmit}
               className="space-y-4"
             >
@@ -103,12 +115,7 @@ export function LoginForm({
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <Label htmlFor="password">Password</Label>
-                  <Link href="#" className="text-sm font-medium text-primary hover:underline">
-                    Forgot password?
-                  </Link>
-                </div>
+                <Label htmlFor="password">Password</Label>
                 <div className="relative">
                   <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -134,13 +141,6 @@ export function LoginForm({
                 {!isSubmitting && <ArrowRight className="h-4 w-4" />}
               </Button>
             </form>
-
-            <p className="text-center text-sm text-muted-foreground">
-              {switchText}{" "}
-              <Link href={switchHref} className="font-medium text-primary hover:underline">
-                {switchLabel}
-              </Link>
-            </p>
           </div>
         </div>
       </section>

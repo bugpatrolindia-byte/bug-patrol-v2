@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'MindTrack | Psychometric Assessments',
-  description: 'A calmer psychometric assessment workspace',
+  title: 'Bug Patrol',
+  description: 'Customer visit and pest control service management',
   generator: 'v0.app',
   icons: {
     icon: [
