@@ -49,6 +49,7 @@ interface StaffProfile {
 interface StaffFormState {
   fullName: string
   email: string
+  password: string
   phone: string
   jobTitle: string
 }
@@ -56,6 +57,7 @@ interface StaffFormState {
 const emptyForm: StaffFormState = {
   fullName: "",
   email: "",
+  password: "",
   phone: "",
   jobTitle: "",
 }
@@ -112,6 +114,7 @@ export default function AdminStaffPage() {
     setForm({
       fullName: staff.full_name,
       email: staff.email,
+      password: "",
       phone: staff.phone ?? "",
       jobTitle: staff.job_title ?? "",
     })
@@ -127,25 +130,48 @@ export default function AdminStaffPage() {
       return
     }
 
+    if (!editingStaff && form.password.length < 8) {
+      setError("A staff password must be at least 8 characters.")
+      return
+    }
+
     setIsSaving(true)
     setError("")
 
     const payload = {
       full_name: form.fullName.trim(),
-      email: form.email.trim().toLowerCase(),
+      email: editingStaff ? editingStaff.email : form.email.trim().toLowerCase(),
       phone: cleanOptional(form.phone),
       job_title: cleanOptional(form.jobTitle),
     }
 
-    const supabase = createSupabaseBrowserClient()
-    const request = editingStaff
-      ? supabase.from("staff_profiles").update(payload).eq("id", editingStaff.id)
-      : supabase.from("staff_profiles").insert(payload)
+    let saveError: string | null = null
 
-    const { error: saveError } = await request
+    if (editingStaff) {
+      const supabase = createSupabaseBrowserClient()
+      const { error: updateError } = await supabase
+        .from("staff_profiles")
+        .update(payload)
+        .eq("id", editingStaff.id)
+      saveError = updateError?.message ?? null
+    } else {
+      const response = await fetch("/api/admin/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: payload.full_name,
+          email: payload.email,
+          password: form.password,
+          phone: payload.phone,
+          jobTitle: payload.job_title,
+        }),
+      })
+      const result = (await response.json()) as { error?: string }
+      saveError = response.ok ? null : result.error ?? "Unable to create the staff account."
+    }
 
     if (saveError) {
-      setError(saveError.message)
+      setError(saveError)
     } else {
       setDialogOpen(false)
       await loadStaffProfiles()
@@ -287,7 +313,9 @@ export default function AdminStaffPage() {
           <DialogHeader>
             <DialogTitle>{editingStaff ? "Edit Staff" : "Add Staff"}</DialogTitle>
             <DialogDescription>
-              This stores the staff profile. Create the login user in Supabase Auth separately for now.
+              {editingStaff
+                ? "Update the staff profile details below. The login email and password are managed separately."
+                : "Create the staff login and profile together. Give the email and password to the staff member."}
             </DialogDescription>
           </DialogHeader>
 
@@ -306,11 +334,27 @@ export default function AdminStaffPage() {
                   id="email"
                   type="email"
                   value={form.email}
+                  disabled={Boolean(editingStaff)}
                   onChange={(event) => setForm({ ...form, email: event.target.value })}
                   placeholder="staff@example.com"
                 />
               </Field>
             </div>
+
+            {!editingStaff && (
+              <Field label="Login password" htmlFor="password">
+                <Input
+                  id="password"
+                  type="password"
+                  minLength={8}
+                  value={form.password}
+                  onChange={(event) => setForm({ ...form, password: event.target.value })}
+                  placeholder="At least 8 characters"
+                  autoComplete="new-password"
+                />
+                <p className="text-xs text-muted-foreground">Save this password before sharing the login details.</p>
+              </Field>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Phone" htmlFor="phone">
