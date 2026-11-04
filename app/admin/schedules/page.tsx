@@ -1,7 +1,7 @@
 "use client"
 
 import { FormEvent, useEffect, useMemo, useState } from "react"
-import { CalendarClock, Filter, Loader2, Pencil, Plus } from "lucide-react"
+import { CalendarClock, ChevronLeft, ChevronRight, Filter, Loader2, Pencil, Plus } from "lucide-react"
 
 import { AdminNavbar } from "@/components/admin/admin-navbar"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
@@ -85,6 +85,7 @@ const emptyForm: ScheduleFormState = {
 
 const statusFilters = ["All", "Scheduled", "In Progress", "Completed"] as const
 type StatusFilter = (typeof statusFilters)[number]
+const calendarWeekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
 export default function AdminSchedulesPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -96,6 +97,10 @@ export default function AdminSchedulesPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All")
   const [staffFilter, setStaffFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("")
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const today = new Date()
+    return new Date(today.getFullYear(), today.getMonth(), 1)
+  })
   const [dialogOpen, setDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -125,6 +130,26 @@ export default function AdminSchedulesPage() {
       return matchesStatus && matchesStaff && matchesDate
     })
   }, [dateFilter, staffFilter, statusFilter, visits])
+
+  const calendarCells = useMemo(() => {
+    const firstDay = calendarMonth.getDay()
+    const daysInMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate()
+
+    return Array.from({ length: firstDay + daysInMonth }, (_, index) => {
+      if (index < firstDay) {
+        return null
+      }
+
+      return new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), index - firstDay + 1)
+    })
+  }, [calendarMonth])
+
+  const visitCountByDate = useMemo(() => {
+    return visits.reduce<Record<string, number>>((counts, visit) => {
+      counts[visit.scheduled_date] = (counts[visit.scheduled_date] ?? 0) + 1
+      return counts
+    }, {})
+  }, [visits])
 
   useEffect(() => {
     void loadPageData()
@@ -253,6 +278,74 @@ export default function AdminSchedulesPage() {
             <SummaryCard title="Today" value={todayVisitCount.toString()} />
             <SummaryCard title="Completed" value={statusCounts.completed.toString()} />
           </div>
+
+          <Card className="mb-5 border-border bg-card py-4">
+            <CardHeader className="flex flex-row items-center justify-between px-4 pb-3">
+              <div>
+                <CardTitle>Schedule Calendar</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">Select a day to view its scheduled visits.</p>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Previous month"
+                  onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <p className="min-w-32 text-center text-sm font-medium">{formatMonth(calendarMonth)}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Next month"
+                  onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="px-4">
+              <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-muted-foreground">
+                {calendarWeekdays.map((weekday) => (
+                  <div key={weekday} className="py-2">
+                    {weekday}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {calendarCells.map((date, index) => {
+                  if (!date) {
+                    return <div key={`empty-${index}`} className="min-h-14 rounded-md" />
+                  }
+
+                  const dateKey = formatDateKey(date)
+                  const visitCount = visitCountByDate[dateKey] ?? 0
+                  const isSelected = dateFilter === dateKey
+
+                  return (
+                    <button
+                      key={dateKey}
+                      type="button"
+                      className={`min-h-14 rounded-md border p-2 text-left transition-colors hover:border-primary hover:bg-primary/5 ${
+                        isSelected ? "border-primary bg-primary/10" : "border-border"
+                      }`}
+                      onClick={() => setDateFilter(dateKey)}
+                    >
+                      <span className="text-sm font-medium">{date.getDate()}</span>
+                      {visitCount > 0 && (
+                        <span className="mt-2 block text-xs font-medium text-primary">
+                          {visitCount} {visitCount === 1 ? "visit" : "visits"}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
 
           <Card className="border-border bg-card py-4">
             <CardHeader className="flex flex-col gap-3 px-4 pb-3 sm:flex-row sm:items-center sm:justify-between">
@@ -553,6 +646,21 @@ function formatDate(date: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(`${date}T00:00:00`))
+}
+
+function formatDateKey(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+
+  return `${year}-${month}-${day}`
+}
+
+function formatMonth(date: Date) {
+  return new Intl.DateTimeFormat("en-IN", {
+    month: "long",
+    year: "numeric",
+  }).format(date)
 }
 
 function formatTime(time: string) {
