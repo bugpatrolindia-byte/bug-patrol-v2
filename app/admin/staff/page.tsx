@@ -233,14 +233,21 @@ export default function AdminStaffPage() {
   }
 
   async function toggleStaff(staff: StaffProfile) {
-    const supabase = createSupabaseBrowserClient()
-    const { error: updateError } = await supabase
-      .from("staff_profiles")
-      .update({ is_active: !staff.is_active })
-      .eq("id", staff.id)
+    setError("")
 
-    if (updateError) {
-      setError(updateError.message)
+    const response = await fetch("/api/admin/staff", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "set-status",
+        staffProfileId: staff.id,
+        isActive: !staff.is_active,
+      }),
+    })
+    const result = (await response.json()) as { error?: string }
+
+    if (!response.ok) {
+      setError(result.error ?? "Unable to update the staff account status.")
       return
     }
 

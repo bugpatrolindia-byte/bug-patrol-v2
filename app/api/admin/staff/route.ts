@@ -34,6 +34,7 @@ export async function POST(request: Request) {
       jobTitle?: unknown
       action?: unknown
       staffProfileId?: unknown
+      isActive?: unknown
     }
 
     const action = body.action === "reset-password" ? "reset-password" : "create"
@@ -73,6 +74,58 @@ export async function POST(request: Request) {
 
       if (resetError) {
         return NextResponse.json({ error: resetError.message }, { status: 400 })
+      }
+
+      return NextResponse.json({ success: true })
+    }
+
+    if (body.action === "set-status") {
+      const staffProfileId = typeof body.staffProfileId === "string" ? body.staffProfileId : ""
+      const isActive = body.isActive === true
+
+      if (!staffProfileId) {
+        return NextResponse.json({ error: "A staff profile is required." }, { status: 400 })
+      }
+
+      const { data: staffProfile, error: profileLookupError } = await adminClient
+        .from("staff_profiles")
+        .select("auth_user_id")
+        .eq("id", staffProfileId)
+        .maybeSingle()
+
+      if (profileLookupError || !staffProfile) {
+        return NextResponse.json(
+          { error: profileLookupError?.message ?? "Staff profile not found." },
+          { status: 400 }
+        )
+      }
+
+      if (staffProfile.auth_user_id) {
+        const { error: authStatusError } = await adminClient.auth.admin.updateUserById(staffProfile.auth_user_id, {
+          ban_duration: isActive ? "none" : "876000h",
+        })
+
+        if (authStatusError) {
+          return NextResponse.json({ error: authStatusError.message }, { status: 400 })
+        }
+
+        if (!isActive) {
+          await adminClient.auth.admin.signOut(staffProfile.auth_user_id, "global")
+        }
+      }
+
+      const { error: statusError } = await adminClient
+        .from("staff_profiles")
+        .update({ is_active: isActive })
+        .eq("id", staffProfileId)
+
+      if (statusError) {
+        if (staffProfile.auth_user_id) {
+          await adminClient.auth.admin.updateUserById(staffProfile.auth_user_id, {
+            ban_duration: isActive ? "876000h" : "none",
+          })
+        }
+        return NextResponse.json({ error: statusError.message }, { status: 400 })
       }
 
       return NextResponse.json({ success: true })
