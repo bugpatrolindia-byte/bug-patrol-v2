@@ -1,7 +1,7 @@
 "use client"
 
 import { FormEvent, useEffect, useMemo, useState } from "react"
-import { Loader2, Pencil, Plus, Trash2, UserRound } from "lucide-react"
+import { KeyRound, Loader2, Pencil, Plus, Trash2, UserRound } from "lucide-react"
 
 import { AdminNavbar } from "@/components/admin/admin-navbar"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
@@ -39,6 +39,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 
 interface StaffProfile {
   id: string
+  auth_user_id: string | null
   full_name: string
   email: string
   phone: string | null
@@ -68,9 +69,14 @@ export default function AdminStaffPage() {
   const [form, setForm] = useState<StaffFormState>(emptyForm)
   const [editingStaff, setEditingStaff] = useState<StaffProfile | null>(null)
   const [staffToRemove, setStaffToRemove] = useState<StaffProfile | null>(null)
+  const [staffToReset, setStaffToReset] = useState<StaffProfile | null>(null)
+  const [resetPassword, setResetPassword] = useState("")
+  const [resetError, setResetError] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [resetDialogOpen, setResetDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isResetting, setIsResetting] = useState(false)
   const [error, setError] = useState("")
 
   const activeStaff = useMemo(
@@ -89,7 +95,7 @@ export default function AdminStaffPage() {
     const supabase = createSupabaseBrowserClient()
     const { data, error: staffError } = await supabase
       .from("staff_profiles")
-      .select("id, full_name, email, phone, job_title, is_active")
+      .select("id, auth_user_id, full_name, email, phone, job_title, is_active")
       .order("full_name", { ascending: true })
 
     if (staffError) {
@@ -120,6 +126,52 @@ export default function AdminStaffPage() {
     })
     setError("")
     setDialogOpen(true)
+  }
+
+  function openResetDialog(staff: StaffProfile) {
+    setStaffToReset(staff)
+    setResetPassword("")
+    setResetError("")
+    setError("")
+    setResetDialogOpen(true)
+  }
+
+  async function handleResetPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!staffToReset || resetPassword.length < 8) {
+      setResetError("The new password must be at least 8 characters.")
+      return
+    }
+
+    setIsResetting(true)
+    setResetError("")
+
+    try {
+      const response = await fetch("/api/admin/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reset-password",
+          staffProfileId: staffToReset.id,
+          password: resetPassword,
+        }),
+      })
+      const result = (await response.json()) as { error?: string }
+
+      if (!response.ok) {
+        setResetError(result.error ?? "Unable to reset the staff password.")
+        return
+      }
+
+      setResetDialogOpen(false)
+      setStaffToReset(null)
+      setResetPassword("")
+    } catch {
+      setResetError("Unable to reset the staff password. Check your connection and try again.")
+    } finally {
+      setIsResetting(false)
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -285,6 +337,16 @@ export default function AdminStaffPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openResetDialog(staff)}
+                              disabled={!staff.auth_user_id}
+                              title={staff.auth_user_id ? "Reset login password" : "No login account linked"}
+                            >
+                              <KeyRound className="h-4 w-4" />
+                              Reset Password
+                            </Button>
                             <Button variant="outline" size="sm" onClick={() => openEditDialog(staff)}>
                               <Pencil className="h-4 w-4" />
                               Edit
@@ -382,6 +444,56 @@ export default function AdminStaffPage() {
               <Button type="submit" disabled={isSaving}>
                 {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                 {editingStaff ? "Save Changes" : "Add Staff"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={resetDialogOpen}
+        onOpenChange={(open) => {
+          setResetDialogOpen(open)
+          if (!open) {
+            setStaffToReset(null)
+            setResetPassword("")
+            setResetError("")
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset staff password</DialogTitle>
+            <DialogDescription>
+              Set a new login password for {staffToReset?.full_name ?? "this staff member"}, then share it securely.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleResetPassword} className="grid gap-4">
+            <Field label="New login password" htmlFor="resetPassword">
+              <Input
+                id="resetPassword"
+                type="password"
+                minLength={8}
+                value={resetPassword}
+                onChange={(event) => setResetPassword(event.target.value)}
+                placeholder="At least 8 characters"
+                autoComplete="new-password"
+                autoFocus
+              />
+            </Field>
+            {resetError && (
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {resetError}
+              </p>
+            )}
+            <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" onClick={() => setResetDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isResetting}>
+                {isResetting && <Loader2 className="h-4 w-4 animate-spin" />}
+                Reset Password
               </Button>
             </div>
           </form>

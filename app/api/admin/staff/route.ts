@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser()
 
     if (!user || user.app_metadata?.role !== "admin") {
-      return NextResponse.json({ error: "Only admins can create staff accounts." }, { status: 403 })
+      return NextResponse.json({ error: "Only admins can manage staff accounts." }, { status: 403 })
     }
 
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -32,17 +32,12 @@ export async function POST(request: Request) {
       password?: unknown
       phone?: unknown
       jobTitle?: unknown
+      action?: unknown
+      staffProfileId?: unknown
     }
 
-    const fullName = typeof body.fullName === "string" ? body.fullName.trim() : ""
-    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : ""
+    const action = body.action === "reset-password" ? "reset-password" : "create"
     const password = typeof body.password === "string" ? body.password : ""
-    const phone = typeof body.phone === "string" ? body.phone.trim() || null : null
-    const jobTitle = typeof body.jobTitle === "string" ? body.jobTitle.trim() || null : null
-
-    if (!fullName || !email || !password) {
-      return NextResponse.json({ error: "Full name, email, and password are required." }, { status: 400 })
-    }
 
     if (password.length < 8) {
       return NextResponse.json({ error: "The staff password must be at least 8 characters." }, { status: 400 })
@@ -51,6 +46,46 @@ export async function POST(request: Request) {
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     })
+
+    if (action === "reset-password") {
+      const staffProfileId = typeof body.staffProfileId === "string" ? body.staffProfileId : ""
+
+      if (!staffProfileId) {
+        return NextResponse.json({ error: "A staff profile is required." }, { status: 400 })
+      }
+
+      const { data: staffProfile, error: profileError } = await adminClient
+        .from("staff_profiles")
+        .select("auth_user_id")
+        .eq("id", staffProfileId)
+        .maybeSingle()
+
+      if (profileError || !staffProfile?.auth_user_id) {
+        return NextResponse.json(
+          { error: profileError?.message ?? "This staff profile is not linked to a login account." },
+          { status: 400 }
+        )
+      }
+
+      const { error: resetError } = await adminClient.auth.admin.updateUserById(staffProfile.auth_user_id, {
+        password,
+      })
+
+      if (resetError) {
+        return NextResponse.json({ error: resetError.message }, { status: 400 })
+      }
+
+      return NextResponse.json({ success: true })
+    }
+
+    const fullName = typeof body.fullName === "string" ? body.fullName.trim() : ""
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : ""
+    const phone = typeof body.phone === "string" ? body.phone.trim() || null : null
+    const jobTitle = typeof body.jobTitle === "string" ? body.jobTitle.trim() || null : null
+
+    if (!fullName || !email || !password) {
+      return NextResponse.json({ error: "Full name, email, and password are required." }, { status: 400 })
+    }
 
     const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
       email,
