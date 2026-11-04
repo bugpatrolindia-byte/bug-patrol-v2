@@ -131,6 +131,22 @@ export default function AdminSchedulesPage() {
     })
   }, [dateFilter, staffFilter, statusFilter, visits])
 
+  const scheduleConflict = useMemo(() => {
+    if (!form.staffId || !form.scheduledDate || !form.scheduledTime) {
+      return null
+    }
+
+    return (
+      visits.find(
+        (visit) =>
+          visit.id !== editingVisit?.id &&
+          visit.staff_id === form.staffId &&
+          visit.scheduled_date === form.scheduledDate &&
+          visit.scheduled_time.slice(0, 5) === form.scheduledTime
+      ) ?? null
+    )
+  }, [editingVisit, form.scheduledDate, form.scheduledTime, form.staffId, visits])
+
   const calendarCells = useMemo(() => {
     const firstDay = calendarMonth.getDay()
     const daysInMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate()
@@ -241,6 +257,13 @@ export default function AdminSchedulesPage() {
       return
     }
 
+    if (scheduleConflict) {
+      setError(
+        `${scheduleConflict.staff_profiles?.full_name ?? "This staff member"} already has a visit at this date and time.`
+      )
+      return
+    }
+
     setIsSaving(true)
     setError("")
 
@@ -257,7 +280,11 @@ export default function AdminSchedulesPage() {
       : await supabase.from("visits").insert({ ...payload, status: "Scheduled" })
 
     if (saveError) {
-      setError(saveError.message)
+      setError(
+        saveError.message.includes("visits_staff_schedule_slot_unique")
+          ? "This staff member already has a visit at the selected date and time."
+          : saveError.message
+      )
     } else {
       setDialogOpen(false)
       await loadPageData()
@@ -558,11 +585,18 @@ export default function AdminSchedulesPage() {
               </Field>
             </div>
 
+            {scheduleConflict && (
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {scheduleConflict.staff_profiles?.full_name ?? "This staff member"} already has a visit at this date
+                and time. Choose another staff member or time slot.
+              </p>
+            )}
+
             <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSaving}>
+              <Button type="submit" disabled={isSaving || Boolean(scheduleConflict)}>
                 {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                 {editingVisit ? "Save Schedule" : "Add Visit"}
               </Button>

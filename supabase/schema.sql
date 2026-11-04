@@ -98,6 +98,10 @@ create table if not exists public.visits (
   updated_at timestamptz not null default now()
 );
 
+create unique index if not exists visits_staff_schedule_slot_unique
+on public.visits (staff_id, scheduled_date, scheduled_time)
+where staff_id is not null;
+
 alter table public.visits enable row level security;
 
 drop trigger if exists visits_set_updated_at on public.visits;
