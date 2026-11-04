@@ -40,15 +40,15 @@ export async function POST(request: Request) {
     const action = body.action === "reset-password" ? "reset-password" : "create"
     const password = typeof body.password === "string" ? body.password : ""
 
-    if (password.length < 8) {
-      return NextResponse.json({ error: "The staff password must be at least 8 characters." }, { status: 400 })
-    }
-
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     })
 
     if (action === "reset-password") {
+      if (password.length < 8) {
+        return NextResponse.json({ error: "The staff password must be at least 8 characters." }, { status: 400 })
+      }
+
       const staffProfileId = typeof body.staffProfileId === "string" ? body.staffProfileId : ""
 
       if (!staffProfileId) {
@@ -129,6 +129,10 @@ export async function POST(request: Request) {
       }
 
       return NextResponse.json({ success: true })
+    }
+
+    if (password.length < 8) {
+      return NextResponse.json({ error: "The staff password must be at least 8 characters." }, { status: 400 })
     }
 
     const fullName = typeof body.fullName === "string" ? body.fullName.trim() : ""
