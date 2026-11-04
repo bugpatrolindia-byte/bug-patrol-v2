@@ -1,7 +1,7 @@
 "use client"
 
 import { FormEvent, useEffect, useMemo, useState } from "react"
-import { CalendarClock, Filter, Loader2, Plus } from "lucide-react"
+import { CalendarClock, Filter, Loader2, Pencil, Plus } from "lucide-react"
 
 import { AdminNavbar } from "@/components/admin/admin-navbar"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
@@ -47,6 +47,8 @@ interface StaffOption {
 
 interface Visit {
   id: string
+  customer_id: string
+  staff_id: string | null
   scheduled_date: string
   scheduled_time: string
   status: "Scheduled" | "In Progress" | "Completed"
@@ -90,7 +92,10 @@ export default function AdminSchedulesPage() {
   const [customers, setCustomers] = useState<CustomerOption[]>([])
   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([])
   const [form, setForm] = useState<ScheduleFormState>(emptyForm)
+  const [editingVisit, setEditingVisit] = useState<Visit | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All")
+  const [staffFilter, setStaffFilter] = useState("all")
+  const [dateFilter, setDateFilter] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -111,12 +116,15 @@ export default function AdminSchedulesPage() {
   }, [visits])
 
   const filteredVisits = useMemo(() => {
-    if (statusFilter === "All") {
-      return visits
-    }
+    return visits.filter((visit) => {
+      const matchesStatus = statusFilter === "All" || visit.status === statusFilter
+      const matchesStaff =
+        staffFilter === "all" || (staffFilter === "unassigned" ? !visit.staff_id : visit.staff_id === staffFilter)
+      const matchesDate = !dateFilter || visit.scheduled_date === dateFilter
 
-    return visits.filter((visit) => visit.status === statusFilter)
-  }, [statusFilter, visits])
+      return matchesStatus && matchesStaff && matchesDate
+    })
+  }, [dateFilter, staffFilter, statusFilter, visits])
 
   useEffect(() => {
     void loadPageData()
@@ -131,7 +139,7 @@ export default function AdminSchedulesPage() {
       supabase
         .from("visits")
         .select(
-          "id, scheduled_date, scheduled_time, status, remarks, customers(business_name, address), staff_profiles(full_name), visit_chemical_usages(quantity_used, chemicals(name, unit))"
+          "id, customer_id, staff_id, scheduled_date, scheduled_time, status, remarks, customers(business_name, address), staff_profiles(full_name), visit_chemical_usages(quantity_used, chemicals(name, unit))"
         )
         .order("scheduled_date", { ascending: true })
         .order("scheduled_time", { ascending: true }),
@@ -172,7 +180,20 @@ export default function AdminSchedulesPage() {
   }
 
   function openCreateDialog() {
+    setEditingVisit(null)
     setForm(emptyForm)
+    setError("")
+    setDialogOpen(true)
+  }
+
+  function openEditDialog(visit: Visit) {
+    setEditingVisit(visit)
+    setForm({
+      customerId: visit.customer_id,
+      staffId: visit.staff_id ?? "",
+      scheduledDate: visit.scheduled_date,
+      scheduledTime: visit.scheduled_time.slice(0, 5),
+    })
     setError("")
     setDialogOpen(true)
   }
@@ -198,14 +219,17 @@ export default function AdminSchedulesPage() {
     setIsSaving(true)
     setError("")
 
-    const supabase = createSupabaseBrowserClient()
-    const { error: saveError } = await supabase.from("visits").insert({
+    const payload = {
       customer_id: form.customerId,
       staff_id: form.staffId || null,
       scheduled_date: form.scheduledDate,
       scheduled_time: form.scheduledTime,
-      status: "Scheduled",
-    })
+    }
+
+    const supabase = createSupabaseBrowserClient()
+    const { error: saveError } = editingVisit
+      ? await supabase.from("visits").update(payload).eq("id", editingVisit.id)
+      : await supabase.from("visits").insert({ ...payload, status: "Scheduled" })
 
     if (saveError) {
       setError(saveError.message)
@@ -250,23 +274,58 @@ export default function AdminSchedulesPage() {
                 </p>
               )}
 
-              <div className="mb-4 flex flex-col gap-3 rounded-lg border border-border bg-secondary/40 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mb-4 grid gap-3 rounded-lg border border-border bg-secondary/40 p-3 lg:grid-cols-[auto_1fr] lg:items-center">
                 <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                   <Filter className="h-4 w-4" />
                   Filter visits
                 </div>
-                <div className="grid grid-cols-2 gap-2 sm:flex">
-                  {statusFilters.map((filter) => (
+                <div className="grid gap-2 sm:grid-cols-[auto_auto_auto_1fr]">
+                  <div className="grid grid-cols-2 gap-2 sm:flex">
+                    {statusFilters.map((filter) => (
+                      <Button
+                        key={filter}
+                        type="button"
+                        size="sm"
+                        variant={statusFilter === filter ? "default" : "outline"}
+                        onClick={() => setStatusFilter(filter)}
+                      >
+                        {filter}
+                      </Button>
+                    ))}
+                  </div>
+                  <Select value={staffFilter} onValueChange={setStaffFilter}>
+                    <SelectTrigger aria-label="Filter by staff" className="w-full sm:w-44">
+                      <SelectValue placeholder="All staff" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All staff</SelectItem>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {staffOptions.map((staff) => (
+                        <SelectItem key={staff.id} value={staff.id}>
+                          {staff.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="date"
+                    aria-label="Filter by date"
+                    value={dateFilter}
+                    onChange={(event) => setDateFilter(event.target.value)}
+                    className="sm:w-44"
+                  />
+                  {(staffFilter !== "all" || dateFilter) && (
                     <Button
-                      key={filter}
                       type="button"
-                      size="sm"
-                      variant={statusFilter === filter ? "default" : "outline"}
-                      onClick={() => setStatusFilter(filter)}
+                      variant="ghost"
+                      onClick={() => {
+                        setStaffFilter("all")
+                        setDateFilter("")
+                      }}
                     >
-                      {filter}
+                      Clear filters
                     </Button>
-                  ))}
+                  )}
                 </div>
               </div>
 
@@ -298,6 +357,7 @@ export default function AdminSchedulesPage() {
                       <TableHead>Status</TableHead>
                       <TableHead>Chemical Used</TableHead>
                       <TableHead>Remarks</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -321,6 +381,16 @@ export default function AdminSchedulesPage() {
                             {visit.remarks ?? "-"}
                           </p>
                         </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end">
+                            {visit.status !== "Completed" && (
+                              <Button variant="outline" size="sm" onClick={() => openEditDialog(visit)}>
+                                <Pencil className="h-4 w-4" />
+                                Reschedule
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -334,9 +404,11 @@ export default function AdminSchedulesPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Scheduled Visit</DialogTitle>
+            <DialogTitle>{editingVisit ? "Reschedule Visit" : "Add Scheduled Visit"}</DialogTitle>
             <DialogDescription>
-              Start with one visit. Monthly auto-generation and rescheduling can build on this.
+              {editingVisit
+                ? "Update the customer, staff assignment, date, or time for this visit."
+                : "Create a visit and assign it to an active staff member."}
             </DialogDescription>
           </DialogHeader>
 
@@ -399,7 +471,7 @@ export default function AdminSchedulesPage() {
               </Button>
               <Button type="submit" disabled={isSaving}>
                 {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                Add Visit
+                {editingVisit ? "Save Schedule" : "Add Visit"}
               </Button>
             </div>
           </form>
