@@ -1,7 +1,7 @@
 "use client"
 
 import { FormEvent, useEffect, useMemo, useState } from "react"
-import { FlaskConical, Loader2, Pencil, Plus, Trash2 } from "lucide-react"
+import { FlaskConical, Loader2, Pencil, Plus, Power, Trash2 } from "lucide-react"
 
 import { AdminNavbar } from "@/components/admin/admin-navbar"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
@@ -284,17 +284,33 @@ export default function AdminInventoryPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={() => openEditDialog(chemical)}>
+                          <div className="flex justify-end gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => openEditDialog(chemical)}
+                              aria-label={`Edit ${chemical.name}`}
+                              title="Edit chemical"
+                            >
                               <Pencil className="h-4 w-4" />
-                              Edit
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => toggleChemical(chemical)}>
-                              {chemical.is_active ? "Disable" : "Enable"}
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => toggleChemical(chemical)}
+                              aria-label={`${chemical.is_active ? "Disable" : "Enable"} ${chemical.name}`}
+                              title={chemical.is_active ? "Disable chemical" : "Enable chemical"}
+                            >
+                              <Power className="h-4 w-4" />
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={() => setChemicalToRemove(chemical)}>
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              onClick={() => setChemicalToRemove(chemical)}
+                              aria-label={`Remove ${chemical.name}`}
+                              title="Remove chemical"
+                            >
                               <Trash2 className="h-4 w-4" />
-                              Remove
                             </Button>
                           </div>
                         </TableCell>

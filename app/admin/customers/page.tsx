@@ -1,7 +1,7 @@
 "use client"
 
 import { FormEvent, useEffect, useMemo, useState } from "react"
-import { Building2, Loader2, Pencil, Plus, Trash2 } from "lucide-react"
+import { Building2, History, Loader2, Pencil, Plus, Power, Trash2 } from "lucide-react"
 
 import { AdminNavbar } from "@/components/admin/admin-navbar"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
@@ -72,6 +72,19 @@ interface StaffOption {
   full_name: string
 }
 
+interface CustomerVisit {
+  id: string
+  scheduled_date: string
+  scheduled_time: string
+  status: "Scheduled" | "In Progress" | "Completed"
+  remarks: string | null
+  staff_profiles: { full_name: string } | null
+  visit_chemical_usages: {
+    quantity_used: number
+    chemicals: { name: string; unit: string } | null
+  }[]
+}
+
 interface CustomerFormState {
   businessName: string
   customerType: CustomerType
@@ -105,7 +118,11 @@ export default function AdminCustomersPage() {
   const [form, setForm] = useState<CustomerFormState>(emptyForm)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [customerToRemove, setCustomerToRemove] = useState<Customer | null>(null)
+  const [customerForHistory, setCustomerForHistory] = useState<Customer | null>(null)
+  const [customerVisits, setCustomerVisits] = useState<CustomerVisit[]>([])
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState("")
@@ -179,6 +196,30 @@ export default function AdminCustomersPage() {
     })
     setError("")
     setDialogOpen(true)
+  }
+
+  async function openHistoryDialog(customer: Customer) {
+    setCustomerForHistory(customer)
+    setCustomerVisits([])
+    setHistoryDialogOpen(true)
+    setIsHistoryLoading(true)
+    setError("")
+
+    const supabase = createSupabaseBrowserClient()
+    const { data, error: historyError } = await supabase
+      .from("visits")
+      .select("id, scheduled_date, scheduled_time, status, remarks, staff_profiles(full_name), visit_chemical_usages(quantity_used, chemicals(name, unit))")
+      .eq("customer_id", customer.id)
+      .order("scheduled_date", { ascending: false })
+      .order("scheduled_time", { ascending: false })
+
+    if (historyError) {
+      setError(historyError.message)
+    } else {
+      setCustomerVisits((data ?? []) as CustomerVisit[])
+    }
+
+    setIsHistoryLoading(false)
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -338,17 +379,42 @@ export default function AdminCustomersPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={() => openEditDialog(customer)}>
+                          <div className="flex justify-end gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => void openHistoryDialog(customer)}
+                              aria-label={`View visit history for ${customer.business_name}`}
+                              title="View visit history"
+                            >
+                              <History className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => openEditDialog(customer)}
+                              aria-label={`Edit ${customer.business_name}`}
+                              title="Edit customer"
+                            >
                               <Pencil className="h-4 w-4" />
-                              Edit
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => toggleCustomer(customer)}>
-                              {customer.is_active ? "Disable" : "Enable"}
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => toggleCustomer(customer)}
+                              aria-label={`${customer.is_active ? "Disable" : "Enable"} ${customer.business_name}`}
+                              title={customer.is_active ? "Disable customer" : "Enable customer"}
+                            >
+                              <Power className="h-4 w-4" />
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={() => setCustomerToRemove(customer)}>
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              onClick={() => setCustomerToRemove(customer)}
+                              aria-label={`Remove ${customer.business_name}`}
+                              title="Remove customer"
+                            >
                               <Trash2 className="h-4 w-4" />
-                              Remove
                             </Button>
                           </div>
                         </TableCell>
@@ -513,6 +579,58 @@ export default function AdminCustomersPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{customerForHistory?.business_name ?? "Customer"} visit history</DialogTitle>
+            <DialogDescription>Review scheduled work, assigned staff, remarks, and chemical usage.</DialogDescription>
+          </DialogHeader>
+
+          {isHistoryLoading ? (
+            <div className="flex min-h-32 items-center justify-center text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading visit history...
+            </div>
+          ) : customerVisits.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+              No visits recorded for this customer yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Staff</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Chemicals</TableHead>
+                    <TableHead>Remarks</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {customerVisits.map((visit) => (
+                    <TableRow key={visit.id}>
+                      <TableCell>
+                        <div className="whitespace-nowrap">
+                          <p>{formatVisitDate(visit.scheduled_date)}</p>
+                          <p className="text-xs text-muted-foreground">{formatVisitTime(visit.scheduled_time)}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>{visit.staff_profiles?.full_name ?? "Unassigned"}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{visit.status}</Badge>
+                      </TableCell>
+                      <TableCell>{formatVisitChemicals(visit.visit_chemical_usages)}</TableCell>
+                      <TableCell className="max-w-56 text-sm text-muted-foreground">{visit.remarks ?? "-"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={Boolean(customerToRemove)} onOpenChange={(open) => !open && setCustomerToRemove(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -571,4 +689,40 @@ function cleanOptional(value: string) {
   const trimmed = value.trim()
 
   return trimmed.length > 0 ? trimmed : null
+}
+
+function formatVisitDate(date: string) {
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${date}T00:00:00`))
+}
+
+function formatVisitTime(time: string) {
+  const [hours = "00", minutes = "00"] = time.split(":")
+  const date = new Date()
+  date.setHours(Number(hours), Number(minutes), 0, 0)
+
+  return new Intl.DateTimeFormat("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date)
+}
+
+function formatVisitChemicals(usages: CustomerVisit["visit_chemical_usages"]) {
+  if (usages.length === 0) {
+    return "-"
+  }
+
+  return usages
+    .map((usage) => {
+      const name = usage.chemicals?.name ?? "Unknown"
+      const unit = usage.chemicals?.unit ?? ""
+
+      return `${name} (${Number(usage.quantity_used).toLocaleString("en-IN", {
+        maximumFractionDigits: 2,
+      })}${unit ? ` ${unit}` : ""})`
+    })
+    .join(", ")
 }

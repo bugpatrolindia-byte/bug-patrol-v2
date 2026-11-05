@@ -1,7 +1,8 @@
 "use client"
 
 import { FormEvent, useEffect, useMemo, useState } from "react"
-import { KeyRound, Loader2, Pencil, Plus, Trash2, UserRound } from "lucide-react"
+import { CalendarClock, KeyRound, Loader2, Pencil, Plus, Power, Trash2, UserRound } from "lucide-react"
+import Link from "next/link"
 
 import { AdminNavbar } from "@/components/admin/admin-navbar"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
@@ -343,27 +344,52 @@ export default function AdminStaffPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="flex justify-end gap-2">
+                          <div className="flex justify-end gap-1.5">
+                            <Button variant="outline" size="icon" asChild>
+                              <Link
+                                href={`/admin/schedules?staff=${staff.id}`}
+                                aria-label={`View schedule for ${staff.full_name}`}
+                                title="View schedule"
+                              >
+                                <CalendarClock className="h-4 w-4" />
+                              </Link>
+                            </Button>
                             <Button
                               variant="outline"
-                              size="sm"
+                              size="icon"
                               onClick={() => openResetDialog(staff)}
                               disabled={!staff.auth_user_id}
+                              aria-label={`Reset password for ${staff.full_name}`}
                               title={staff.auth_user_id ? "Reset login password" : "No login account linked"}
                             >
                               <KeyRound className="h-4 w-4" />
-                              Reset Password
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => openEditDialog(staff)}>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => openEditDialog(staff)}
+                              aria-label={`Edit ${staff.full_name}`}
+                              title="Edit staff"
+                            >
                               <Pencil className="h-4 w-4" />
-                              Edit
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => toggleStaff(staff)}>
-                              {staff.is_active ? "Disable" : "Enable"}
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => toggleStaff(staff)}
+                              aria-label={`${staff.is_active ? "Disable" : "Enable"} ${staff.full_name}`}
+                              title={staff.is_active ? "Disable staff" : "Enable staff"}
+                            >
+                              <Power className="h-4 w-4" />
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={() => setStaffToRemove(staff)}>
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              onClick={() => setStaffToRemove(staff)}
+                              aria-label={`Remove ${staff.full_name}`}
+                              title="Remove staff"
+                            >
                               <Trash2 className="h-4 w-4" />
-                              Remove
                             </Button>
                           </div>
                         </TableCell>

@@ -171,6 +171,14 @@ export default function AdminSchedulesPage() {
     void loadPageData()
   }, [])
 
+  useEffect(() => {
+    const requestedStaff = new URLSearchParams(window.location.search).get("staff")
+
+    if (requestedStaff) {
+      setStaffFilter(requestedStaff)
+    }
+  }, [])
+
   async function loadPageData() {
     setIsLoading(true)
     setError("")
@@ -504,9 +512,14 @@ export default function AdminSchedulesPage() {
                         <TableCell>
                           <div className="flex justify-end">
                             {visit.status !== "Completed" && (
-                              <Button variant="outline" size="sm" onClick={() => openEditDialog(visit)}>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => openEditDialog(visit)}
+                                aria-label="Reschedule visit"
+                                title="Reschedule visit"
+                              >
                                 <Pencil className="h-4 w-4" />
-                                Reschedule
                               </Button>
                             )}
                           </div>
