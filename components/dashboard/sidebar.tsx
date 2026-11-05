@@ -7,7 +7,6 @@ import {
   UserRound,
   Settings,
   X,
-  Shield,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -48,14 +47,14 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <Shield className="h-4 w-4 text-primary-foreground" />
+        <div className="flex h-20 items-center justify-between border-b border-sidebar-border px-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center">
+              <img src="/branding/ant-logo.png" alt="Bug Patrol" className="h-9 w-9 object-contain" />
             </div>
             <div className="flex flex-col">
-              <span className="text-lg font-semibold tracking-tight leading-none">Bug Patrol</span>
-              <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Staff</span>
+              <span className="text-[1.05rem] font-bold leading-none tracking-tight">Bug Patrol</span>
+              <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.22em] text-primary">Staff</span>
             </div>
           </div>
           <Button
