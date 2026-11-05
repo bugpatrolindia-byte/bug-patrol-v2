@@ -1,11 +1,20 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { BarChart3, CalendarCheck2, FlaskConical, Loader2, Users } from "lucide-react"
+import { BarChart3, CalendarCheck2, Download, FlaskConical, Loader2, Users } from "lucide-react"
 
 import { AdminNavbar } from "@/components/admin/admin-navbar"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -20,6 +29,7 @@ interface ReportVisit {
   id: string
   scheduled_date: string
   status: "Scheduled" | "In Progress" | "Completed"
+  remarks: string | null
   staff_profiles: {
     full_name: string
   } | null
@@ -33,6 +43,11 @@ interface ReportVisit {
       unit: string
     } | null
   }[]
+}
+
+interface ReportStaff {
+  id: string
+  full_name: string
 }
 
 interface ChemicalReportRow {
@@ -52,6 +67,10 @@ interface StaffReportRow {
 export default function AdminReportsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [visits, setVisits] = useState<ReportVisit[]>([])
+  const [staffOptions, setStaffOptions] = useState<ReportStaff[]>([])
+  const [selectedMonth, setSelectedMonth] = useState(() => getMonthKey(new Date()))
+  const [selectedStaff, setSelectedStaff] = useState("all")
+  const [selectedCustomer, setSelectedCustomer] = useState("all")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
 
@@ -59,19 +78,51 @@ export default function AdminReportsPage() {
     void loadReports()
   }, [])
 
-  const currentMonthLabel = useMemo(() => {
+  const selectedMonthLabel = useMemo(() => {
+    if (!selectedMonth) {
+      return "All dates"
+    }
+
     return new Intl.DateTimeFormat("en-IN", {
       month: "long",
       year: "numeric",
-    }).format(new Date())
-  }, [])
+    }).format(new Date(`${selectedMonth}-01T00:00:00`))
+  }, [selectedMonth])
+
+  const staffNames = useMemo(() => {
+    return staffOptions.map((staff) => staff.full_name)
+  }, [staffOptions])
+
+  const customerNames = useMemo(() => {
+    return Array.from(new Set(visits.map((visit) => visit.customers?.business_name ?? "Unknown customer"))).sort()
+  }, [visits])
+
+  const filteredVisits = useMemo(() => {
+    return visits.filter((visit) => {
+      const matchesMonth = !selectedMonth || visit.scheduled_date.startsWith(selectedMonth)
+      const matchesStaff =
+        selectedStaff === "all" || (visit.staff_profiles?.full_name ?? "Unassigned") === selectedStaff
+      const matchesCustomer =
+        selectedCustomer === "all" || (visit.customers?.business_name ?? "Unknown customer") === selectedCustomer
+
+      return matchesMonth && matchesStaff && matchesCustomer
+    })
+  }, [selectedCustomer, selectedMonth, selectedStaff, visits])
 
   const monthlyCompletedVisits = useMemo(() => {
-    const now = new Date()
-    const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+    return filteredVisits.filter((visit) => visit.status === "Completed")
+  }, [filteredVisits])
 
-    return visits.filter((visit) => visit.status === "Completed" && visit.scheduled_date.startsWith(monthPrefix))
-  }, [visits])
+  const selectedPeriodLabel = useMemo(() => {
+    if (!selectedMonth) {
+      return "all selected dates"
+    }
+
+    return new Intl.DateTimeFormat("en-IN", {
+      month: "long",
+      year: "numeric",
+    }).format(new Date(`${selectedMonth}-01T00:00:00`))
+  }, [selectedMonth])
 
   const chemicalRows = useMemo(() => {
     const totals = new Map<string, ChemicalReportRow>()
@@ -100,7 +151,7 @@ export default function AdminReportsPage() {
   const staffRows = useMemo(() => {
     const totals = new Map<string, StaffReportRow>()
 
-    visits.forEach((visit) => {
+    filteredVisits.forEach((visit) => {
       const name = visit.staff_profiles?.full_name ?? "Unassigned"
       const current = totals.get(name) ?? {
         name,
@@ -121,25 +172,54 @@ export default function AdminReportsPage() {
     })
 
     return Array.from(totals.values()).sort((first, second) => second.completed - first.completed)
-  }, [visits])
+  }, [filteredVisits])
+
+  function downloadCsv() {
+    const headers = ["Date", "Customer", "Staff", "Status", "Chemicals", "Remarks"]
+    const rows = filteredVisits.map((visit) => [
+      visit.scheduled_date,
+      visit.customers?.business_name ?? "Unknown customer",
+      visit.staff_profiles?.full_name ?? "Unassigned",
+      visit.status,
+      formatChemicalUsage(visit.visit_chemical_usages),
+      visit.remarks ?? "",
+    ])
+    const csv = [headers, ...rows].map((row) => row.map(csvValue).join(",")).join("\n")
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }))
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `bug-patrol-report-${selectedMonth || "all-dates"}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   async function loadReports() {
     setIsLoading(true)
     setError("")
 
     const supabase = createSupabaseBrowserClient()
-    const { data, error: reportsError } = await supabase
-      .from("visits")
-      .select(
-        "id, scheduled_date, status, staff_profiles(full_name), customers(business_name), visit_chemical_usages(quantity_used, chemicals(name, unit))"
-      )
-      .order("scheduled_date", { ascending: false })
+    const [visitsResult, staffResult] = await Promise.all([
+      supabase
+        .from("visits")
+        .select(
+          "id, scheduled_date, status, remarks, staff_profiles(full_name), customers(business_name), visit_chemical_usages(quantity_used, chemicals(name, unit))"
+        )
+        .order("scheduled_date", { ascending: false }),
+      supabase.from("staff_profiles").select("id, full_name").order("full_name", { ascending: true }),
+    ])
 
-    if (reportsError) {
-      setError(`${reportsError.message}. Run the latest supabase/schema.sql in Supabase SQL Editor.`)
+    if (visitsResult.error) {
+      setError(`${visitsResult.error.message}. Run the latest supabase/schema.sql in Supabase SQL Editor.`)
       setVisits([])
     } else {
-      setVisits((data ?? []) as ReportVisit[])
+      setVisits((visitsResult.data ?? []) as ReportVisit[])
+    }
+
+    if (staffResult.error) {
+      setError(staffResult.error.message)
+      setStaffOptions([])
+    } else {
+      setStaffOptions((staffResult.data ?? []) as ReportStaff[])
     }
 
     setIsLoading(false)
@@ -158,9 +238,44 @@ export default function AdminReportsPage() {
             </p>
           )}
 
+          <Card className="mb-5 border-border bg-card py-4">
+            <CardContent className="flex flex-col gap-3 px-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="grid flex-1 gap-3 sm:grid-cols-3">
+                <div className="grid gap-2">
+                  <label htmlFor="reportMonth" className="text-sm font-medium">Month</label>
+                  <Input id="reportMonth" type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Staff</label>
+                  <Select value={selectedStaff} onValueChange={setSelectedStaff}>
+                    <SelectTrigger><SelectValue placeholder="All staff" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All staff</SelectItem>
+                      {staffNames.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Customer</label>
+                  <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+                    <SelectTrigger><SelectValue placeholder="All customers" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All customers</SelectItem>
+                      {customerNames.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button type="button" variant="outline" className="gap-2" onClick={downloadCsv} disabled={filteredVisits.length === 0}>
+                <Download className="h-4 w-4" />
+                Export CSV
+              </Button>
+            </CardContent>
+          </Card>
+
           <div className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 lg:gap-3">
-            <SummaryCard title={`${currentMonthLabel} Completed`} value={monthlyCompletedVisits.length.toString()} icon={CalendarCheck2} />
-            <SummaryCard title="Total Visits" value={visits.length.toString()} icon={BarChart3} />
+            <SummaryCard title={`${selectedMonthLabel} Completed`} value={monthlyCompletedVisits.length.toString()} icon={CalendarCheck2} />
+            <SummaryCard title="Filtered Visits" value={filteredVisits.length.toString()} icon={BarChart3} />
             <SummaryCard title="Chemical Entries" value={chemicalRows.reduce((total, row) => total + row.entryCount, 0).toString()} icon={FlaskConical} />
             <SummaryCard title="Staff With Visits" value={staffRows.length.toString()} icon={Users} />
           </div>
@@ -168,7 +283,7 @@ export default function AdminReportsPage() {
           <div className="grid gap-5 xl:grid-cols-2">
             <ReportCard
               title="Chemical Consumption"
-              description={`Usage from completed visits in ${currentMonthLabel}.`}
+              description={`Usage from completed visits in ${selectedPeriodLabel}.`}
               isLoading={isLoading}
               isEmpty={chemicalRows.length === 0}
               emptyText="No chemical usage found for this month."
@@ -295,4 +410,27 @@ function formatQuantity(value: number, unit: string) {
   return `${Number(value).toLocaleString("en-IN", {
     maximumFractionDigits: 2,
   })}${unit ? ` ${unit}` : ""}`
+}
+
+function getMonthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+}
+
+function formatChemicalUsage(usages: ReportVisit["visit_chemical_usages"]) {
+  if (usages.length === 0) {
+    return "-"
+  }
+
+  return usages
+    .map((usage) => {
+      const name = usage.chemicals?.name ?? "Unknown chemical"
+      const unit = usage.chemicals?.unit ?? ""
+
+      return `${name} (${formatQuantity(Number(usage.quantity_used), unit)})`
+    })
+    .join("; ")
+}
+
+function csvValue(value: string) {
+  return `"${value.replaceAll('"', '""')}"`
 }
