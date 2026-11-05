@@ -47,7 +47,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex h-20 items-center justify-between border-b border-sidebar-border px-6">
+        <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center">
               <img src="/branding/ant-logo.png" alt="Bug Patrol" className="h-9 w-9 object-contain" />
